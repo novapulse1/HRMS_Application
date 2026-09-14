@@ -154,6 +154,7 @@ async function main() {
           bank_ifsc: 'SVB0001',
           shifts: {
             create: {
+              company_id: demoCompany.id,
               shift_id: generalShift.id,
               effective_from: today,
             },
