@@ -47,7 +47,21 @@ app.use(
 
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, postman) or any client
+      if (!origin) return callback(null, true);
+      // Automatically allow Netlify, Vercel, localhost or configured FRONTEND_URL
+      if (
+        origin.includes('localhost') ||
+        origin.includes('netlify.app') ||
+        origin.includes('vercel.app') ||
+        origin.includes('onrender.com') ||
+        (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL)
+      ) {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    },
     credentials: true,
   })
 );
