@@ -1,4 +1,14 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+export function getApiBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes('localhost')) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  if (typeof window !== 'undefined' && !window.location.hostname.includes('localhost')) {
+    return 'https://hrms-application-backend-134y.onrender.com/api/v1';
+  }
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+}
+
+const API_BASE_URL = getApiBaseUrl();
 
 export interface ApiResponse<T = unknown> {
   data: T | null;
@@ -81,7 +91,7 @@ class ApiClient {
     realm: 'admin' | 'tenant' = 'tenant',
     isRetry = false
   ): Promise<ApiResponse<T>> {
-    const url = `${API_BASE_URL}${endpoint}`;
+    const url = `${getApiBaseUrl()}${endpoint}`;
     const token = realm === 'admin' ? this.getAdminToken() : this.getTenantToken();
 
     const headers: Record<string, string> = {
@@ -109,7 +119,7 @@ class ApiClient {
       if (refreshToken && !this.isRefreshing) {
         this.isRefreshing = true;
         try {
-          const refreshUrl = `${API_BASE_URL}/${realm === 'admin' ? 'admin' : 'auth'}/refresh`;
+          const refreshUrl = `${getApiBaseUrl()}/${realm === 'admin' ? 'admin' : 'auth'}/refresh`;
           const refreshRes = await fetch(refreshUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1110,7 +1120,7 @@ class ApiClient {
 
   async downloadPayslipPdf(id: string, filename: string) {
     const token = this.getTenantToken();
-    const res = await fetch(`${API_BASE_URL}/payroll/payslips/${id}/pdf`, {
+    const res = await fetch(`${getApiBaseUrl()}/payroll/payslips/${id}/pdf`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -1129,7 +1139,7 @@ class ApiClient {
 
   async downloadForm16Pdf(id: string, filename: string) {
     const token = this.getTenantToken();
-    const res = await fetch(`${API_BASE_URL}/payroll/payslips/${id}/form16`, {
+    const res = await fetch(`${getApiBaseUrl()}/payroll/payslips/${id}/form16`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },

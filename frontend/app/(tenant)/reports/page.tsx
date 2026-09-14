@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import api from '@/lib/api';
+import api, { getApiBaseUrl } from '@/lib/api';
 import {
   FileSpreadsheet,
   ShieldAlert,
@@ -67,7 +67,7 @@ export default function ReportsPage() {
   const loadAuditLogs = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1'}/audit-logs`, {
+      const res = await fetch(`${getApiBaseUrl()}/audit-logs`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('nova_tenant_token')}`,
         },
@@ -108,7 +108,7 @@ export default function ReportsPage() {
     }
   };
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+  const API_BASE = getApiBaseUrl();
   const isCompanyAdmin = user?.role === 'company_admin';
 
   return (
