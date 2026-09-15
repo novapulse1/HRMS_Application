@@ -69,6 +69,18 @@ app.use(
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Root welcome & health status
+app.get('/', (req, res) => {
+  return res.status(200).json({
+    service: 'Nova Pulse HRMS Backend API',
+    status: 'HEALTHY',
+    version: '1.0.0',
+    health: '/health',
+    api: '/api/v1',
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Health check endpoint
 app.get('/health', async (req, res) => {
   try {
