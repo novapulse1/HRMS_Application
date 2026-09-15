@@ -84,4 +84,24 @@ router.get(
   }
 );
 
+// 5. Update Current Tenant User Profile (Avatar / Phone)
+const updateProfileSchema = z.object({
+  avatar_url: z.string().optional(),
+  phone: z.string().optional(),
+});
+
+router.patch(
+  '/me',
+  tenantGuard,
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const validated = updateProfileSchema.parse(req.body);
+      const user = await authService.updateProfile(req.tenantUser!.userId, validated);
+      return sendSuccess(res, user, 200);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 export default router;

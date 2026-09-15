@@ -12,6 +12,10 @@ import {
   Save,
   Building2,
   Sparkles,
+  User,
+  Camera,
+  Trash2,
+  Upload,
 } from 'lucide-react';
 
 const DAYS_OF_WEEK = [
@@ -30,6 +34,14 @@ export default function SettingsPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Current User Profile State
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [userAvatar, setUserAvatar] = useState<string | null>(null);
+  const [userPhone, setUserPhone] = useState<string>('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
   const [workingDays, setWorkingDays] = useState<string[]>(['mon', 'tue', 'wed', 'thu', 'fri']);
   const [hoursStart, setHoursStart] = useState('09:00');
   const [hoursEnd, setHoursEnd] = useState('18:00');
@@ -40,7 +52,17 @@ export default function SettingsPage() {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const data = await api.getCompanySettings();
+        const [me, data] = await Promise.all([
+          api.tenantGetMe().catch(() => null),
+          api.getCompanySettings().catch(() => null),
+        ]);
+
+        if (me) {
+          setCurrentUser(me);
+          setUserAvatar(me.avatar_url || me.employee?.avatar_url || null);
+          setUserPhone(me.employee?.phone || '');
+        }
+
         if (data) {
           setWorkingDays((data.working_days_json as string[]) || ['mon', 'tue', 'wed', 'thu', 'fri']);
           setHoursStart(data.working_hours_start || '09:00');
@@ -50,7 +72,7 @@ export default function SettingsPage() {
           setOvertimeMultiplier(data.overtime_rate_multiplier || 1.5);
         }
       } catch (err) {
-        console.error('Failed to load company settings:', err);
+        console.error('Failed to load settings:', err);
       } finally {
         setLoading(false);
       }
@@ -58,6 +80,66 @@ export default function SettingsPage() {
 
     fetchSettings();
   }, []);
+
+  const handleAvatarFile = (file: File) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setProfileError('Please select a valid image file (PNG, JPG, WEBP).');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_SIZE = 256;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height = Math.round((height * MAX_SIZE) / width);
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width = Math.round((width * MAX_SIZE) / height);
+            height = MAX_SIZE;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const base64 = canvas.toDataURL('image/jpeg', 0.85);
+          setUserAvatar(base64);
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileSaving(true);
+    setProfileSuccess(null);
+    setProfileError(null);
+    try {
+      await api.updateMyProfile({
+        avatar_url: userAvatar || '',
+        phone: userPhone || undefined,
+      });
+      setProfileSuccess('Profile and photo saved successfully!');
+      setTimeout(() => setProfileSuccess(null), 3500);
+    } catch (err: any) {
+      setProfileError(err.message || 'Failed to update profile');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   const handleDayToggle = (day: string) => {
     if (workingDays.includes(day)) {
@@ -93,33 +175,209 @@ export default function SettingsPage() {
     }
   };
 
+  const displayName = currentUser?.employee
+    ? `${currentUser.employee.first_name} ${currentUser.employee.last_name}`
+    : currentUser?.email?.split('@')[0] || 'Member';
+
+  const userInitials = displayName
+    .split(' ')
+    .map((n: string) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+
+  const isCompanyAdmin = currentUser?.role === 'company_admin';
+
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-8 max-w-4xl animate-in fade-in duration-300">
       <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-          <Settings className="w-6 h-6 text-indigo-400" />
-          <span>Company Policies & Operations</span>
+        <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2.5">
+          <Settings className="w-6 h-6 text-emerald-400" />
+          <span>Account & System Settings</span>
         </h1>
         <p className="text-xs text-slate-400 mt-1">
-          Configure default working schedule, shift spans, overtime compensations, and payroll cycle rules.
+          Manage your personal profile identity, photo avatar, and enterprise operational policies.
         </p>
       </div>
 
-      {successMessage && (
-        <div className="p-3.5 rounded-xl bg-emerald-950/60 border border-emerald-800/80 text-emerald-300 text-xs flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>{successMessage}</span>
+      {/* SECTION 1: Personal Profile & Avatar (Available to all users) */}
+      <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 shadow-xl space-y-5">
+        <div className="flex items-center justify-between pb-4 border-b border-slate-800/80">
+          <div>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2">
+              <User className="w-4 h-4 text-emerald-400" />
+              <span>My Profile & Avatar Photo</span>
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Upload a personal photo for your HRMS profile, team directory, and navigation bar.
+            </p>
+          </div>
+          <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            {currentUser?.role?.replace('_', ' ').toUpperCase() || 'USER'}
+          </span>
         </div>
-      )}
 
-      {errorMessage && (
-        <div className="p-3.5 rounded-xl bg-red-950/60 border border-red-800/80 text-red-300 text-xs flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-          <span>{errorMessage}</span>
-        </div>
-      )}
+        {profileSuccess && (
+          <div className="p-3.5 rounded-xl bg-emerald-950/60 border border-emerald-800/80 text-emerald-300 text-xs flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{profileSuccess}</span>
+          </div>
+        )}
 
-      <form onSubmit={handleSave} className="space-y-6">
+        {profileError && (
+          <div className="p-3.5 rounded-xl bg-red-950/60 border border-red-800/80 text-red-300 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+            <span>{profileError}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSaveProfile} className="space-y-6">
+          {/* Avatar Upload Area */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-5 p-4 bg-slate-950/60 rounded-xl border border-slate-800/80">
+            <div className="relative shrink-0">
+              {userAvatar ? (
+                <img
+                  src={userAvatar}
+                  alt={displayName}
+                  className="w-20 h-20 rounded-2xl object-cover border-2 border-emerald-500/40 shadow-xl shadow-emerald-950/50"
+                />
+              ) : (
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white font-extrabold text-2xl flex items-center justify-center border border-emerald-500/30 shadow-xl shadow-emerald-950/50">
+                  {userInitials}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <div>
+                <div className="text-xs font-semibold text-white">Profile Photo</div>
+                <p className="text-[11px] text-slate-400">
+                  Supports JPG, PNG, WEBP. Automatically optimized and persisted.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl shadow-md shadow-emerald-600/20 cursor-pointer transition">
+                  <Camera className="w-3.5 h-3.5" />
+                  <span>Choose Photo</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleAvatarFile(f);
+                    }}
+                  />
+                </label>
+
+                {userAvatar && (
+                  <button
+                    type="button"
+                    onClick={() => setUserAvatar(null)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-red-500/20 text-slate-300 hover:text-red-400 text-xs font-medium rounded-xl border border-slate-700 transition cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Remove</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Readonly & Editable Fields */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div>
+              <label className="block text-slate-400 mb-1 font-medium">Full Name</label>
+              <input
+                type="text"
+                disabled
+                value={displayName}
+                className="w-full bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 text-slate-300 font-medium cursor-not-allowed"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-400 mb-1 font-medium">Email Address</label>
+              <input
+                type="email"
+                disabled
+                value={currentUser?.email || ''}
+                className="w-full bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 text-slate-300 font-medium cursor-not-allowed"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-300 mb-1 font-medium">Phone Number</label>
+              <input
+                type="text"
+                value={userPhone}
+                onChange={(e) => setUserPhone(e.target.value)}
+                placeholder="+91 98765 43210"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+
+            {currentUser?.employee?.employee_code && (
+              <div>
+                <label className="block text-slate-400 mb-1 font-medium">Employee Code</label>
+                <input
+                  type="text"
+                  disabled
+                  value={currentUser.employee.employee_code}
+                  className="w-full bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 text-emerald-400 font-mono font-bold cursor-not-allowed"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-3 border-t border-slate-800/80">
+            <button
+              type="submit"
+              disabled={profileSaving}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-2 px-5 rounded-xl shadow-lg shadow-emerald-600/25 flex items-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+            >
+              {profileSaving ? (
+                <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <>
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Update Profile</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* SECTION 2: Company Policies & Operations (Admin Only) */}
+      {isCompanyAdmin && (
+        <div className="space-y-6">
+          <div className="pt-4">
+            <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-indigo-400" />
+              <span>Company Policies & Operations</span>
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Configure default working schedules, shift spans, overtime compensation, and payroll cycle rules.
+            </p>
+          </div>
+
+          {successMessage && (
+            <div className="p-3.5 rounded-xl bg-emerald-950/60 border border-emerald-800/80 text-emerald-300 text-xs flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{successMessage}</span>
+            </div>
+          )}
+
+          {errorMessage && (
+            <div className="p-3.5 rounded-xl bg-red-950/60 border border-red-800/80 text-red-300 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSave} className="space-y-6">
         {/* Working Days & Schedule */}
         <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 space-y-4">
           <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
@@ -262,5 +520,7 @@ export default function SettingsPage() {
         </div>
       </form>
     </div>
+  )}
+</div>
   );
 }

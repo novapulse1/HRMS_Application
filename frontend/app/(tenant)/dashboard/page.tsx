@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Megaphone,
   Pin,
+  Camera,
 } from 'lucide-react';
 
 interface RosterEmployee {
@@ -30,6 +31,7 @@ interface RosterEmployee {
   email: string;
   department: string;
   designation: string;
+  avatar_url?: string | null;
   check_in_time?: string | null;
   check_out_time?: string | null;
   status?: string;
@@ -93,7 +95,45 @@ export default function TenantDashboardOverview() {
     ? `${user.employee.first_name} ${user.employee.last_name}`
     : user?.email.split('@')[0] || 'Member';
 
+  const userAvatar = user?.avatar_url || user?.employee?.avatar_url;
+  const userInitials = displayName
+    .split(' ')
+    .map((n: string) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+
   const role = user?.role || 'employee';
+
+  const getGreetingInfo = () => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) {
+      return {
+        greeting: 'Good morning',
+        emoji: '🌅',
+        subtext: 'Ready for a productive day ahead? Let’s make great progress.',
+      };
+    } else if (hour >= 12 && hour < 17) {
+      return {
+        greeting: 'Good afternoon',
+        emoji: '☀️',
+        subtext: 'Hope your day is going smoothly! Keep up the great work.',
+      };
+    } else if (hour >= 17 && hour < 22) {
+      return {
+        greeting: 'Good evening',
+        emoji: '🌆',
+        subtext: 'Wrapping up today’s tasks or tracking your deliverables?',
+      };
+    } else {
+      return {
+        greeting: 'Good night',
+        emoji: '🌙',
+        subtext: 'Working late or checking in early? Stay focused and rest well.',
+      };
+    }
+  };
+  const greetingInfo = getGreetingInfo();
 
   // Filter employees for the active tab based on search query
   const getFilteredList = () => {
@@ -119,20 +159,48 @@ export default function TenantDashboardOverview() {
   return (
     <div className="space-y-6">
       {/* Welcome Banner */}
-      <div className="bg-gradient-to-r from-emerald-950/40 via-slate-900/60 to-teal-950/40 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full mb-2">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span className="capitalize">{user?.company?.name || 'Acme Corporation'}</span>
+      <div className="bg-gradient-to-r from-emerald-950/40 via-slate-900/60 to-teal-950/40 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-sm flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+        <div className="flex items-center gap-4">
+          {/* User Profile Avatar */}
+          <div className="relative shrink-0">
+            {userAvatar ? (
+              <img
+                src={userAvatar}
+                alt={displayName}
+                className="w-16 h-16 rounded-2xl object-cover border-2 border-emerald-500/40 shadow-lg shadow-emerald-950/40"
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white font-bold text-xl flex items-center justify-center border border-emerald-500/30 shadow-lg shadow-emerald-950/40">
+                {userInitials}
+              </div>
+            )}
+            <Link
+              href="/settings"
+              title="Upload / Change Photo"
+              className="absolute -bottom-1 -right-1 p-1.5 bg-slate-900 hover:bg-slate-800 text-emerald-400 rounded-lg border border-slate-700 shadow-md transition"
+            >
+              <Camera className="w-3.5 h-3.5" />
+            </Link>
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">
-            Welcome back, {displayName}
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            {user?.employee?.designation?.name
-              ? `${user.employee.designation.name} • ${user?.employee?.department?.name || 'Operations'}`
-              : `Role: ${role.replace('_', ' ').toUpperCase()}`}
-          </p>
+
+          <div>
+            <div className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full mb-1.5">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="capitalize">{user?.company?.name || 'Acme Corporation'}</span>
+            </div>
+            <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2 flex-wrap">
+              <span>{greetingInfo.greeting}, {displayName}!</span>
+              <span>{greetingInfo.emoji}</span>
+            </h1>
+            <p className="text-xs text-slate-400 mt-1">
+              {greetingInfo.subtext}
+            </p>
+            <p className="text-[11px] text-emerald-400/90 font-medium mt-0.5">
+              {user?.employee?.designation?.name
+                ? `${user.employee.designation.name} • ${user?.employee?.department?.name || 'Operations'}`
+                : `Role: ${role.replace('_', ' ').toUpperCase()}`}
+            </p>
+          </div>
         </div>
 
         {/* Live Clock Card */}
@@ -456,17 +524,25 @@ export default function TenantDashboardOverview() {
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     {/* Avatar */}
-                    <div
-                      className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
-                        activeTab === 'present'
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : activeTab === 'absent'
-                          ? 'bg-red-500/10 text-red-400 border border-red-500/20'
-                          : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      }`}
-                    >
-                      {initials || 'EM'}
-                    </div>
+                    {emp.avatar_url ? (
+                      <img
+                        src={emp.avatar_url}
+                        alt={emp.name}
+                        className="w-9 h-9 rounded-xl object-cover border border-slate-700 shrink-0"
+                      />
+                    ) : (
+                      <div
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                          activeTab === 'present'
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            : activeTab === 'absent'
+                            ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                            : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                        }`}
+                      >
+                        {initials || 'EM'}
+                      </div>
+                    )}
 
                     {/* Info */}
                     <div className="min-w-0">

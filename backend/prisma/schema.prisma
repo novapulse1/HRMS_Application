@@ -207,6 +207,7 @@ model User {
   role                 TenantRole      @default(employee)
   must_change_password Boolean         @default(true)
   is_active            Boolean         @default(true)
+  avatar_url           String?         @db.Text
   last_login_at        DateTime?
   created_at           DateTime        @default(now())
   updated_at           DateTime        @updatedAt
@@ -293,6 +294,7 @@ model Employee {
   bank_ifsc           String?
   bank_name           String?
   address             String?
+  avatar_url          String?            @db.Text
   created_at          DateTime           @default(now())
   updated_at          DateTime           @updatedAt
 

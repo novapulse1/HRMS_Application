@@ -314,6 +314,7 @@ export class AttendanceService {
       employee_code: string;
       name: string;
       email: string;
+      avatar_url: string | null;
       department: string;
       designation: string;
       check_in_time: string | null;
@@ -327,6 +328,7 @@ export class AttendanceService {
       employee_code: string;
       name: string;
       email: string;
+      avatar_url: string | null;
       department: string;
       designation: string;
     }> = [];
@@ -336,6 +338,7 @@ export class AttendanceService {
       employee_code: string;
       name: string;
       email: string;
+      avatar_url: string | null;
       department: string;
       designation: string;
       leave_type: string;
@@ -348,6 +351,7 @@ export class AttendanceService {
       const department = emp.department?.name || 'General';
       const designation = emp.designation?.name || 'Staff';
       const email = emp.email;
+      const avatar_url = emp.avatar_url || null;
 
       if (
         att &&
@@ -360,6 +364,7 @@ export class AttendanceService {
           employee_code: emp.employee_code,
           name,
           email,
+          avatar_url,
           department,
           designation,
           check_in_time: att.check_in_time ? att.check_in_time.toISOString() : null,
@@ -373,6 +378,7 @@ export class AttendanceService {
           employee_code: emp.employee_code,
           name,
           email,
+          avatar_url,
           department,
           designation,
           leave_type: leaveType || 'Approved Leave',
@@ -383,6 +389,7 @@ export class AttendanceService {
           employee_code: emp.employee_code,
           name,
           email,
+          avatar_url,
           department,
           designation,
         });

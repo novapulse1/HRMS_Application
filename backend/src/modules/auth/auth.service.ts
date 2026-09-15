@@ -40,6 +40,7 @@ export class AuthService {
             employee_code: true,
             first_name: true,
             last_name: true,
+            avatar_url: true,
             department: { select: { id: true, name: true } },
             designation: { select: { id: true, name: true } },
           },
@@ -268,6 +269,7 @@ export class AuthService {
         id: true,
         email: true,
         role: true,
+        avatar_url: true,
         company_id: true,
         employee_id: true,
         must_change_password: true,
@@ -287,6 +289,7 @@ export class AuthService {
             employee_code: true,
             first_name: true,
             last_name: true,
+            avatar_url: true,
             email: true,
             phone: true,
             date_of_joining: true,
@@ -311,6 +314,36 @@ export class AuthService {
     }
 
     return user;
+  }
+
+  async updateProfile(userId: string, data: { avatar_url?: string; phone?: string }) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { employee: true },
+    });
+    if (!user) throw new AppError(404, 'NOT_FOUND', 'User not found');
+
+    if (data.avatar_url !== undefined) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { avatar_url: data.avatar_url },
+      });
+      if (user.employee_id) {
+        await prisma.employee.update({
+          where: { id: user.employee_id },
+          data: { avatar_url: data.avatar_url },
+        });
+      }
+    }
+
+    if (data.phone !== undefined && user.employee_id) {
+      await prisma.employee.update({
+        where: { id: user.employee_id },
+        data: { phone: data.phone },
+      });
+    }
+
+    return this.getMe(userId);
   }
 }
 

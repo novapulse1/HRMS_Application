@@ -25,12 +25,11 @@ import {
 
 export default function ShiftsPage() {
   const [shifts, setShifts] = useState<any[]>([]);
-  const [holidays, setHolidays] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // New Work Schedule / Shift Modal
+  // New Shift Modal
   const [showShiftModal, setShowShiftModal] = useState(false);
   const [shiftName, setShiftName] = useState('');
   const [startTime, setStartTime] = useState('09:00');
@@ -38,7 +37,7 @@ export default function ShiftsPage() {
   const [isNightShift, setIsNightShift] = useState(false);
   const [shiftLoading, setShiftLoading] = useState(false);
 
-  // Bulk Assign Work Schedule Modal
+  // Bulk Assign Shift Modal
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignShiftId, setAssignShiftId] = useState('');
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
@@ -49,32 +48,22 @@ export default function ShiftsPage() {
   const [assignLoading, setAssignLoading] = useState(false);
   const [assignMessage, setAssignMessage] = useState<string | null>(null);
 
-  // Statutory Holiday Modal
-  const [showHolidayModal, setShowHolidayModal] = useState(false);
-  const [holidayName, setHolidayName] = useState('');
-  const [holidayDate, setHolidayDate] = useState('');
-  const [isRecurring, setIsRecurring] = useState(false);
-  const [holidayLoading, setHolidayLoading] = useState(false);
-
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [shiftsData, holsData, empsData, deptsData] = await Promise.all([
+      const [shiftsData, empsRes, deptsData] = await Promise.all([
         api.getShifts(),
-        api.getHolidays(),
-        api.getEmployees(),
+        api.getEmployees({ limit: 100 }),
         api.getDepartments(),
       ]);
-
       setShifts(shiftsData);
-      setHolidays(holsData);
-      if (empsData?.data) setEmployees(empsData.data);
-      if (deptsData) setDepartments(deptsData);
+      setEmployees(empsRes.data || []);
+      setDepartments(deptsData);
       if (shiftsData.length > 0 && !assignShiftId) {
         setAssignShiftId(shiftsData[0].id);
       }
     } catch (err) {
-      console.error('Failed to load work schedules/holidays:', err);
+      console.error('Failed to load shifts:', err);
     } finally {
       setLoading(false);
     }
@@ -83,37 +72,6 @@ export default function ShiftsPage() {
   useEffect(() => {
     fetchData();
   }, []);
-
-  // Filtered employees for bulk assignment
-  const filteredEmployees = useMemo(() => {
-    return employees.filter((emp) => {
-      const matchesDept = !deptFilter || emp.department?.id === deptFilter;
-      const fullName = `${emp.first_name} ${emp.last_name}`.toLowerCase();
-      const code = (emp.employee_code || '').toLowerCase();
-      const desig = (emp.designation?.name || '').toLowerCase();
-      const q = empSearch.toLowerCase().trim();
-      const matchesSearch = !q || fullName.includes(q) || code.includes(q) || desig.includes(q);
-      return matchesDept && matchesSearch;
-    });
-  }, [employees, deptFilter, empSearch]);
-
-  const handleSelectAllFiltered = () => {
-    const idsToAdd = filteredEmployees.map((e) => e.id);
-    const combined = Array.from(new Set([...selectedEmployees, ...idsToAdd]));
-    setSelectedEmployees(combined);
-  };
-
-  const handleClearSelection = () => {
-    setSelectedEmployees([]);
-  };
-
-  const handleToggleEmployee = (id: string) => {
-    if (selectedEmployees.includes(id)) {
-      setSelectedEmployees(selectedEmployees.filter((empId) => empId !== id));
-    } else {
-      setSelectedEmployees([...selectedEmployees, id]);
-    }
-  };
 
   const handleCreateShift = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,7 +88,7 @@ export default function ShiftsPage() {
       fetchData();
     } catch (err: unknown) {
       const e = err as Error;
-      alert(`Failed to create work schedule: ${e.message}`);
+      alert(`Failed to create shift: ${e.message}`);
     } finally {
       setShiftLoading(false);
     }
@@ -159,42 +117,40 @@ export default function ShiftsPage() {
       fetchData();
     } catch (err: unknown) {
       const e = err as Error;
-      alert(`Work schedule assignment failed: ${e.message}`);
+      alert(`Shift assignment failed: ${e.message}`);
     } finally {
       setAssignLoading(false);
     }
   };
 
-  const handleCreateHoliday = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setHolidayLoading(true);
-    try {
-      await api.createHoliday({
-        name: holidayName,
-        date: holidayDate,
-        is_recurring_annually: isRecurring,
-      });
-      setShowHolidayModal(false);
-      setHolidayName('');
-      setHolidayDate('');
-      fetchData();
-    } catch (err: unknown) {
-      const e = err as Error;
-      alert(`Failed to declare statutory holiday: ${e.message}`);
-    } finally {
-      setHolidayLoading(false);
-    }
+  // Quick filter helpers for workforce selector
+  const filteredEmployees = useMemo(() => {
+    return employees.filter((emp) => {
+      const matchDept = !deptFilter || emp.department?.id === deptFilter;
+      const q = empSearch.toLowerCase().trim();
+      const matchSearch =
+        !q ||
+        emp.first_name.toLowerCase().includes(q) ||
+        emp.last_name.toLowerCase().includes(q) ||
+        emp.employee_code.toLowerCase().includes(q) ||
+        (emp.designation?.name && emp.designation.name.toLowerCase().includes(q));
+      return matchDept && matchSearch;
+    });
+  }, [employees, deptFilter, empSearch]);
+
+  const handleToggleSelectEmp = (id: string) => {
+    setSelectedEmployees((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
   };
 
-  const handleDeleteHoliday = async (id: string) => {
-    if (!confirm('Are you sure you want to remove this public holiday?')) return;
-    try {
-      await api.deleteHoliday(id);
-      fetchData();
-    } catch (err: unknown) {
-      const e = err as Error;
-      alert(`Failed to delete holiday: ${e.message}`);
-    }
+  const handleSelectAllFiltered = () => {
+    const ids = filteredEmployees.map((e) => e.id);
+    setSelectedEmployees((prev) => Array.from(new Set([...prev, ...ids])));
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedEmployees([]);
   };
 
   const selectedShiftObj = shifts.find((s) => s.id === assignShiftId);
@@ -205,11 +161,11 @@ export default function ShiftsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2.5">
-            <CalendarDays className="w-6 h-6 text-indigo-400" />
-            <span>Work Schedules & Public Holidays</span>
+            <Clock className="w-6 h-6 text-indigo-400" />
+            <span>Shift Management</span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Enterprise duty rosters, operational shift hours, team schedule allocations, and official statutory holidays.
+            Enterprise duty rosters, operational shift hours, and team schedule allocations.
           </p>
         </div>
 
@@ -223,7 +179,7 @@ export default function ShiftsPage() {
             className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold py-2.5 px-4 rounded-xl border border-slate-700 flex items-center gap-2 cursor-pointer shadow-sm transition-all"
           >
             <Users className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Assign Work Schedule</span>
+            <span>Assign Shift</span>
           </button>
 
           <button
@@ -231,7 +187,7 @@ export default function ShiftsPage() {
             className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold py-2.5 px-4 rounded-xl shadow-lg shadow-indigo-600/25 flex items-center gap-2 cursor-pointer transition-all"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>New Work Schedule</span>
+            <span>New Shift</span>
           </button>
         </div>
       </div>
@@ -292,89 +248,14 @@ export default function ShiftsPage() {
         )}
       </div>
 
-      {/* Section 2: Holiday Calendar */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-emerald-400" />
-            <span>Public & Statutory Holiday Calendar</span>
-          </h2>
-
-          <button
-            onClick={() => setShowHolidayModal(true)}
-            className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/40 border border-emerald-800/50 hover:bg-emerald-950/70 transition-all cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Declare Statutory Holiday</span>
-          </button>
-        </div>
-
-        <div className="bg-slate-900/50 border border-slate-800/80 rounded-2xl overflow-hidden backdrop-blur-sm">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-950/60 border-b border-slate-800/80 text-slate-400 uppercase tracking-wider font-semibold">
-              <tr>
-                <th className="py-3.5 px-4">Observance / Holiday Name</th>
-                <th className="py-3.5 px-4">Calendar Date</th>
-                <th className="py-3.5 px-4">Statutory Recurrence</th>
-                <th className="py-3.5 px-4 text-right">Manage</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/50 text-slate-300">
-              {holidays.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="py-8 text-center text-slate-500">
-                    No official public holidays declared for this calendar cycle.
-                  </td>
-                </tr>
-              ) : (
-                holidays.map((h) => {
-                  const dateFmt = new Date(h.date).toLocaleDateString(undefined, {
-                    weekday: 'short',
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                  });
-
-                  return (
-                    <tr key={h.id} className="hover:bg-slate-800/30 transition-colors">
-                      <td className="py-3.5 px-4 font-semibold text-white">{h.name}</td>
-                      <td className="py-3.5 px-4 text-slate-300 font-mono">{dateFmt}</td>
-                      <td className="py-3.5 px-4">
-                        {h.is_recurring_annually ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-indigo-950/50 text-indigo-300 border border-indigo-800/60">
-                            <Repeat className="w-3 h-3" />
-                            <span>Annual Recurring Holiday</span>
-                          </span>
-                        ) : (
-                          <span className="text-slate-500 text-[11px]">Single-Year Observance</span>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <button
-                          onClick={() => handleDeleteHoliday(h.id)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800 cursor-pointer transition-all"
-                          title="Delete Holiday"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Modal 1: Create Work Schedule */}
+      {/* Modal 1: Create Shift */}
       {showShiftModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl text-xs animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between pb-3.5 border-b border-slate-800 mb-4">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-indigo-400" />
-                <h3 className="text-sm font-bold text-white">Configure Work Schedule</h3>
+                <h3 className="text-sm font-bold text-white">Configure Shift</h3>
               </div>
               <button
                 onClick={() => setShowShiftModal(false)}
@@ -447,7 +328,7 @@ export default function ShiftsPage() {
                   disabled={shiftLoading}
                   className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-4 py-2 rounded-xl shadow-lg shadow-indigo-600/25 transition-all cursor-pointer disabled:opacity-50"
                 >
-                  {shiftLoading ? 'Publishing...' : 'Publish Work Schedule'}
+                  {shiftLoading ? 'Publishing...' : 'Publish Shift'}
                 </button>
               </div>
             </form>
@@ -598,7 +479,7 @@ export default function ShiftsPage() {
                     {selectedEmployees.length > 0 && (
                       <button
                         type="button"
-                        onClick={handleClearSelection}
+                        onClick={handleDeselectAll}
                         className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-red-300 rounded-xl border border-slate-700 cursor-pointer transition-all text-xs shrink-0"
                         title="Clear current selection"
                       >
@@ -622,7 +503,7 @@ export default function ShiftsPage() {
                       return (
                         <div
                           key={emp.id}
-                          onClick={() => handleToggleEmployee(emp.id)}
+                          onClick={() => handleToggleSelectEmp(emp.id)}
                           className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all ${
                             isChecked ? 'bg-indigo-950/40 border border-indigo-900/60' : 'hover:bg-slate-900/80'
                           }`}
@@ -689,81 +570,6 @@ export default function ShiftsPage() {
                       <span>Assign Schedule ({selectedEmployees.length} Staff)</span>
                     </>
                   )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal 3: Declare Statutory Holiday */}
-      {showHolidayModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl text-xs animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between pb-3.5 border-b border-slate-800 mb-4">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-emerald-400" />
-                <h3 className="text-sm font-bold text-white">Declare Statutory Holiday</h3>
-              </div>
-              <button
-                onClick={() => setShowHolidayModal(false)}
-                className="text-slate-500 hover:text-slate-300 p-1.5 rounded-xl hover:bg-slate-800 transition-all"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateHoliday} className="space-y-4">
-              <div>
-                <label className="block text-slate-300 mb-1 font-medium">Holiday / Observance Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={holidayName}
-                  onChange={(e) => setHolidayName(e.target.value)}
-                  placeholder="e.g. Independence Day / Republic Day"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-300 mb-1 font-medium">Calendar Date *</label>
-                <input
-                  type="date"
-                  required
-                  value={holidayDate}
-                  onChange={(e) => setHolidayDate(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                />
-              </div>
-
-              <div className="flex items-center gap-2 pt-2 p-3 bg-slate-950/60 rounded-xl border border-slate-800/80">
-                <input
-                  type="checkbox"
-                  id="annualRecur"
-                  checked={isRecurring}
-                  onChange={(e) => setIsRecurring(e.target.checked)}
-                  className="rounded border-slate-800 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                />
-                <label htmlFor="annualRecur" className="text-slate-300 cursor-pointer text-xs">
-                  Annual Recurring Statutory Holiday (Repeats yearly)
-                </label>
-              </div>
-
-              <div className="flex justify-end gap-2.5 pt-4 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowHolidayModal(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 transition-all cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={holidayLoading}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-2 rounded-xl shadow-lg shadow-emerald-600/25 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  {holidayLoading ? 'Publishing...' : 'Publish Holiday'}
                 </button>
               </div>
             </form>

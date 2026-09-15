@@ -347,6 +347,7 @@ export class EmployeesService {
       bank_account_number?: string;
       bank_ifsc?: string;
       address?: string;
+      avatar_url?: string;
       pay_type?: PayType;
       base_amount?: number;
       effective_from?: string | Date;
@@ -420,6 +421,7 @@ export class EmployeesService {
           bank_account_number: data.bank_account_number,
           bank_ifsc: data.bank_ifsc,
           address: data.address,
+          avatar_url: data.avatar_url || null,
         },
       });
 
@@ -479,6 +481,7 @@ export class EmployeesService {
       bank_account_number?: string;
       bank_ifsc?: string;
       address?: string;
+      avatar_url?: string | null;
     }
   ) {
     const existing = await prisma.employee.findFirst({
@@ -506,6 +509,13 @@ export class EmployeesService {
         await tx.user.update({
           where: { id: existing.user_id },
           data: { is_active: isUserActive },
+        });
+      }
+
+      if (data.avatar_url !== undefined && existing.user_id) {
+        await tx.user.update({
+          where: { id: existing.user_id },
+          data: { avatar_url: data.avatar_url },
         });
       }
 

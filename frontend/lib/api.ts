@@ -353,6 +353,7 @@ class ApiClient {
       role: string;
       company_id: string;
       employee_id?: string | null;
+      avatar_url?: string | null;
       must_change_password: boolean;
       company: {
         id: string;
@@ -366,6 +367,7 @@ class ApiClient {
         employee_code: string;
         first_name: string;
         last_name: string;
+        avatar_url?: string | null;
         email: string;
         phone?: string;
         department?: { id: string; name: string };
@@ -373,6 +375,14 @@ class ApiClient {
         manager?: { id: string; first_name: string; last_name: string; employee_code: string };
       };
     }>('/auth/me', { method: 'GET' }, 'tenant');
+    return res.data;
+  }
+
+  async updateMyProfile(body: { avatar_url?: string; phone?: string }) {
+    const res = await this.request('/auth/me', {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }, 'tenant');
     return res.data;
   }
 
@@ -493,6 +503,7 @@ class ApiClient {
     bank_account_number?: string;
     bank_ifsc?: string;
     address?: string;
+    avatar_url?: string;
     pay_type?: 'monthly' | 'hourly' | 'per_day';
     base_amount?: number;
     effective_from?: string;

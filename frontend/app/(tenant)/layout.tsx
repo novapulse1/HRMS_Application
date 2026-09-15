@@ -30,6 +30,7 @@ interface CurrentUser {
   email: string;
   role: 'company_admin' | 'manager' | 'employee';
   company_id: string;
+  avatar_url?: string | null;
   company: {
     name: string;
     license_plan: string;
@@ -39,6 +40,7 @@ interface CurrentUser {
     first_name: string;
     last_name: string;
     employee_code: string;
+    avatar_url?: string | null;
     department?: { name: string };
     designation?: { name: string };
   };
@@ -116,9 +118,9 @@ export default function TenantDashboardLayout({
       roles: ['company_admin', 'manager', 'employee'],
     },
     {
-      label: 'Work Schedules & Holidays',
+      label: 'Shift Manage',
       href: '/shifts',
-      icon: Calendar,
+      icon: Clock,
       roles: ['company_admin', 'manager'],
     },
     {
@@ -268,9 +270,17 @@ export default function TenantDashboardLayout({
         <div className="p-4 border-t border-slate-800/80 bg-slate-950/40">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2.5 overflow-hidden">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-slate-700 to-slate-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
-                {displayName.charAt(0).toUpperCase()}
-              </div>
+              {user?.employee?.avatar_url || user?.avatar_url ? (
+                <img
+                  src={user.employee?.avatar_url || user.avatar_url || ''}
+                  alt={displayName}
+                  className="w-8 h-8 rounded-full object-cover shrink-0 border border-emerald-500/40 shadow-sm"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-sm">
+                  {displayName.charAt(0).toUpperCase()}
+                </div>
+              )}
               <div className="overflow-hidden">
                 <div className="text-xs font-semibold text-white truncate">
                   {displayName}

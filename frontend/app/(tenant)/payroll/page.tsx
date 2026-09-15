@@ -22,6 +22,9 @@ import {
   Landmark,
   XCircle,
   HelpCircle,
+  Trash2,
+  Repeat,
+  X,
 } from 'lucide-react';
 
 interface PayrollRun {
@@ -108,6 +111,13 @@ interface MyPayslip {
   };
 }
 
+interface HolidayItem {
+  id: string;
+  name: string;
+  date: string;
+  is_recurring_annually: boolean;
+}
+
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
@@ -133,7 +143,16 @@ export default function PayrollPage() {
   });
   const [statutorySaved, setStatutorySaved] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'runs' | 'structures' | 'statutory' | 'loans' | 'my'>('runs');
+  const [activeTab, setActiveTab] = useState<'runs' | 'structures' | 'statutory' | 'loans' | 'holidays' | 'my'>('runs');
+
+  // Holidays state
+  const [holidays, setHolidays] = useState<HolidayItem[]>([]);
+  const [showHolidayModal, setShowHolidayModal] = useState(false);
+  const [holidayName, setHolidayName] = useState('');
+  const [holidayDate, setHolidayDate] = useState('');
+  const [holidayRecurring, setHolidayRecurring] = useState(true);
+  const [holidayLoading, setHolidayLoading] = useState(false);
+  const [holidayError, setHolidayError] = useState<string | null>(null);
 
   // Run Payroll Modal
   const [showRunModal, setShowRunModal] = useState(false);
@@ -175,23 +194,27 @@ export default function PayrollPage() {
 
       if (me.role === 'employee') {
         setActiveTab('my');
-        const [payslips, loansData] = await Promise.all([
+        const [payslips, loansData, holidaysData] = await Promise.all([
           api.getMyPayslips(),
           api.getLoans().catch(() => []),
+          api.getHolidays().catch(() => []),
         ]);
         setMyPayslips(payslips);
         setLoans(loansData);
+        setHolidays(holidaysData || []);
       } else {
-        const [runsData, structuresData, payslips, loansData] = await Promise.all([
+        const [runsData, structuresData, payslips, loansData, holidaysData] = await Promise.all([
           api.getPayrollRuns().catch(() => []),
           api.getSalaryStructures().catch(() => []),
           api.getMyPayslips().catch(() => []),
           api.getLoans().catch(() => []),
+          api.getHolidays().catch(() => []),
         ]);
         setRuns(runsData);
         setSalaryItems(structuresData);
         setMyPayslips(payslips);
         setLoans(loansData);
+        setHolidays(holidaysData || []);
 
         if (me.role === 'company_admin') {
           try {
@@ -363,6 +386,39 @@ export default function PayrollPage() {
     }
   };
 
+  const handleCreateHoliday = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setHolidayLoading(true);
+    setHolidayError(null);
+    try {
+      await api.createHoliday({
+        name: holidayName,
+        date: holidayDate,
+        is_recurring_annually: holidayRecurring,
+      });
+      setShowHolidayModal(false);
+      setHolidayName('');
+      setHolidayDate('');
+      const updated = await api.getHolidays();
+      setHolidays(updated || []);
+    } catch (err: any) {
+      setHolidayError(err.message || 'Failed to create holiday');
+    } finally {
+      setHolidayLoading(false);
+    }
+  };
+
+  const handleDeleteHoliday = async (id: string) => {
+    if (!confirm('Are you sure you want to remove this statutory holiday?')) return;
+    try {
+      await api.deleteHoliday(id);
+      const updated = await api.getHolidays();
+      setHolidays(updated || []);
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete holiday');
+    }
+  };
+
   const handleReviewLoan = async (loanId: string, action: 'approved' | 'rejected') => {
     try {
       await api.reviewLoan(loanId, action);
@@ -519,6 +575,18 @@ export default function PayrollPage() {
           }`}
         >
           Loans & Advances ({loans.length})
+        </button>
+
+        <button
+          onClick={() => setActiveTab('holidays')}
+          className={`pb-3 text-sm font-semibold border-b-2 transition flex items-center gap-1.5 ${
+            activeTab === 'holidays'
+              ? 'border-emerald-500 text-emerald-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Calendar className="w-4 h-4" />
+          Holidays & Statutory Offs ({holidays.length})
         </button>
 
         <button
@@ -1079,6 +1147,95 @@ export default function PayrollPage() {
         </div>
       )}
 
+      {/* Tab 6: Holidays & Statutory Offs */}
+      {activeTab === 'holidays' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl shadow-xl">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-emerald-400" />
+                Statutory Public Holidays & Company Offs
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Official paid holidays declared company-wide. These days are automatically credited as fully paid non-working days during payroll calculation.
+              </p>
+            </div>
+            {isCompanyAdmin && (
+              <button
+                onClick={() => setShowHolidayModal(true)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-emerald-600/25 transition cursor-pointer flex-shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                Declare Holiday
+              </button>
+            )}
+          </div>
+
+          <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl overflow-hidden shadow-xl">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-950/60 border-b border-slate-800/80 text-slate-400 uppercase tracking-wider font-semibold">
+                <tr>
+                  <th className="py-3.5 px-6">Observance / Holiday Name</th>
+                  <th className="py-3.5 px-6">Calendar Date</th>
+                  <th className="py-3.5 px-6">Statutory Recurrence</th>
+                  {isCompanyAdmin && <th className="py-3.5 px-6 text-right">Action</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/50 text-slate-300">
+                {holidays.length === 0 ? (
+                  <tr>
+                    <td colSpan={isCompanyAdmin ? 4 : 3} className="py-12 text-center text-slate-500">
+                      <Calendar className="w-10 h-10 mx-auto text-slate-700 mb-2" />
+                      <p className="text-sm font-medium text-slate-400">No official public holidays declared yet</p>
+                      {isCompanyAdmin && (
+                        <p className="text-xs text-slate-500 mt-1">Click &quot;Declare Holiday&quot; above to add company paid holidays.</p>
+                      )}
+                    </td>
+                  </tr>
+                ) : (
+                  holidays.map((h) => {
+                    const dateFmt = new Date(h.date).toLocaleDateString(undefined, {
+                      weekday: 'short',
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric',
+                    });
+
+                    return (
+                      <tr key={h.id} className="hover:bg-slate-800/30 transition-colors">
+                        <td className="py-4 px-6 font-semibold text-white">{h.name}</td>
+                        <td className="py-4 px-6 text-slate-300 font-mono">{dateFmt}</td>
+                        <td className="py-4 px-6">
+                          {h.is_recurring_annually ? (
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              <Repeat className="w-3 h-3" />
+                              <span>Annual Recurring Holiday</span>
+                            </span>
+                          ) : (
+                            <span className="text-slate-500 text-[11px]">Single-Year Observance</span>
+                          )}
+                        </td>
+                        {isCompanyAdmin && (
+                          <td className="py-4 px-6 text-right">
+                            <button
+                              onClick={() => handleDeleteHoliday(h.id)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800 cursor-pointer transition-all"
+                              title="Delete Holiday"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Modal: Run Payroll */}
       {showRunModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
@@ -1433,6 +1590,88 @@ export default function PayrollPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Declare Statutory Holiday */}
+      {showHolidayModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl text-xs animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-800 mb-4">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-sm font-bold text-white">Declare Statutory Holiday</h3>
+              </div>
+              <button
+                onClick={() => setShowHolidayModal(false)}
+                className="text-slate-500 hover:text-slate-300 p-1.5 rounded-xl hover:bg-slate-800 transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {holidayError && (
+              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                {holidayError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateHoliday} className="space-y-4">
+              <div>
+                <label className="block text-slate-300 mb-1 font-medium">Holiday / Observance Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={holidayName}
+                  onChange={(e) => setHolidayName(e.target.value)}
+                  placeholder="e.g. Republic Day / Diwali / Independence Day"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-medium">Calendar Date *</label>
+                <input
+                  type="date"
+                  required
+                  value={holidayDate}
+                  onChange={(e) => setHolidayDate(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2 p-3 bg-slate-950/60 rounded-xl border border-slate-800/80">
+                <input
+                  type="checkbox"
+                  id="annualRecurPayroll"
+                  checked={holidayRecurring}
+                  onChange={(e) => setHolidayRecurring(e.target.checked)}
+                  className="rounded border-slate-800 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                />
+                <label htmlFor="annualRecurPayroll" className="text-slate-300 cursor-pointer text-xs">
+                  Annual Recurring Statutory Holiday (Repeats yearly)
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowHolidayModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={holidayLoading}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-2 rounded-xl shadow-lg shadow-emerald-600/25 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {holidayLoading ? 'Publishing...' : 'Publish Holiday'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

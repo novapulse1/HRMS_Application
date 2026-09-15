@@ -26,6 +26,9 @@ import {
   Clock,
   Coins,
   RefreshCw,
+  Camera,
+  Trash2,
+  Pencil,
 } from 'lucide-react';
 
 interface Employee {
@@ -35,6 +38,7 @@ interface Employee {
   last_name: string;
   email: string;
   phone?: string;
+  avatar_url?: string | null;
   employment_type: string;
   status: string;
   date_of_joining?: string;
@@ -98,6 +102,19 @@ export default function EmployeesPage() {
   const [bankName, setBankName] = useState('');
   const [bankAccount, setBankAccount] = useState('');
   const [bankIfsc, setBankIfsc] = useState('');
+  const [addAvatarUrl, setAddAvatarUrl] = useState<string | null>(null);
+
+  // Edit employee modal state
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editLastName, setEditLastName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editDepartmentId, setEditDepartmentId] = useState('');
+  const [editDesignationId, setEditDesignationId] = useState('');
+  const [editStatus, setEditStatus] = useState('active');
+  const [editAvatarUrl, setEditAvatarUrl] = useState<string | null>(null);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Compensation / Salary form state
   const [payType, setPayType] = useState<'monthly' | 'per_day' | 'hourly'>('monthly');
@@ -168,6 +185,82 @@ export default function EmployeesPage() {
     }
   };
 
+  const handleImageCompression = (file: File, callback: (base64: string) => void) => {
+    if (!file || !file.type.startsWith('image/')) {
+      alert('Please select a valid image file (PNG, JPG, WEBP).');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_SIZE = 256;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height = Math.round((height * MAX_SIZE) / width);
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width = Math.round((width * MAX_SIZE) / height);
+            height = MAX_SIZE;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const base64 = canvas.toDataURL('image/jpeg', 0.85);
+          callback(base64);
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const openEditModal = (emp: Employee) => {
+    setEditingEmployee(emp);
+    setEditFirstName(emp.first_name);
+    setEditLastName(emp.last_name);
+    setEditPhone(emp.phone || '');
+    setEditDepartmentId(emp.department?.id || '');
+    setEditDesignationId(emp.designation?.id || '');
+    setEditStatus(emp.status || 'active');
+    setEditAvatarUrl(emp.avatar_url || null);
+    setEditError(null);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEmployee) return;
+    setEditLoading(true);
+    setEditError(null);
+    try {
+      await api.updateEmployee(editingEmployee.id, {
+        first_name: editFirstName,
+        last_name: editLastName,
+        phone: editPhone || undefined,
+        department_id: editDepartmentId || undefined,
+        designation_id: editDesignationId || undefined,
+        status: editStatus,
+        avatar_url: editAvatarUrl || undefined,
+      });
+      setEditingEmployee(null);
+      await fetchData();
+    } catch (err: any) {
+      setEditError(err.message || 'Failed to update employee');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
   const handleAddEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     setAddLoading(true);
@@ -191,9 +284,11 @@ export default function EmployeesPage() {
         pay_type: baseAmount ? payType : undefined,
         base_amount: baseAmount ? parseFloat(baseAmount) : undefined,
         effective_from: effectiveFrom || dateOfJoining || undefined,
+        avatar_url: addAvatarUrl || undefined,
       });
 
       setShowAddModal(false);
+      setAddAvatarUrl(null);
       setEmployeeCode('');
       setSuggestedCode('');
       setFirstName('');
@@ -471,10 +566,25 @@ export default function EmployeesPage() {
                         </td>
 
                         <td className="py-3.5 px-4">
-                          <div className="font-semibold text-white">
-                            {emp.first_name} {emp.last_name}
+                          <div className="flex items-center gap-3">
+                            {emp.avatar_url ? (
+                              <img
+                                src={emp.avatar_url}
+                                alt={`${emp.first_name} ${emp.last_name}`}
+                                className="w-8 h-8 rounded-full object-cover border border-slate-700 shrink-0"
+                              />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-slate-800 text-emerald-400 font-bold text-xs flex items-center justify-center border border-slate-700 shrink-0">
+                                {emp.first_name[0]}{emp.last_name[0]}
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-semibold text-white">
+                                {emp.first_name} {emp.last_name}
+                              </div>
+                              <div className="text-[11px] text-slate-500">{emp.email}</div>
+                            </div>
                           </div>
-                          <div className="text-[11px] text-slate-500">{emp.email}</div>
                         </td>
 
                         <td className="py-3.5 px-4">
@@ -540,6 +650,14 @@ export default function EmployeesPage() {
                         {isAdmin && (
                           <td className="py-3.5 px-4 text-right space-x-2">
                             <button
+                              onClick={() => openEditModal(emp)}
+                              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer font-medium text-[11px] inline-flex items-center gap-1"
+                              title="Edit Employee & Photo"
+                            >
+                              <Pencil className="w-3 h-3 text-emerald-400" />
+                              <span>Edit</span>
+                            </button>
+                            <button
                               onClick={() => handleInviteUser(emp)}
                               disabled={invitingId === emp.id}
                               className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-emerald-600 text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer font-medium text-[11px]"
@@ -574,9 +692,17 @@ export default function EmployeesPage() {
                 <div>
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white font-bold flex items-center justify-center text-sm shadow-md">
-                        {initials}
-                      </div>
+                      {emp.avatar_url ? (
+                        <img
+                          src={emp.avatar_url}
+                          alt={`${emp.first_name} ${emp.last_name}`}
+                          className="w-10 h-10 rounded-xl object-cover border border-slate-700 shadow-md shrink-0"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white font-bold flex items-center justify-center text-sm shadow-md shrink-0">
+                          {initials}
+                        </div>
+                      )}
                       <div>
                         <h3 className="text-sm font-bold text-white">
                           {emp.first_name} {emp.last_name}
@@ -653,13 +779,23 @@ export default function EmployeesPage() {
                   </div>
 
                   {isAdmin && (
-                    <button
-                      onClick={() => handleInviteUser(emp)}
-                      disabled={invitingId === emp.id}
-                      className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-emerald-600 text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer font-medium text-[11px]"
-                    >
-                      {hasUser ? 'Reset Access' : 'Invite'}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => openEditModal(emp)}
+                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer font-medium text-[11px] inline-flex items-center gap-1"
+                        title="Edit Employee & Photo"
+                      >
+                        <Pencil className="w-3 h-3 text-emerald-400" />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        onClick={() => handleInviteUser(emp)}
+                        disabled={invitingId === emp.id}
+                        className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-emerald-600 text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer font-medium text-[11px]"
+                      >
+                        {hasUser ? 'Reset' : 'Invite'}
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -708,6 +844,53 @@ export default function EmployeesPage() {
                   <Briefcase className="w-3.5 h-3.5" />
                   <span>Corporate Identity & Contact</span>
                 </h4>
+
+                {/* Photo Upload Area */}
+                <div className="flex items-center gap-4 p-3 mb-3.5 bg-slate-950/60 rounded-xl border border-slate-800/80">
+                  <div className="relative shrink-0">
+                    {addAvatarUrl ? (
+                      <img
+                        src={addAvatarUrl}
+                        alt="Employee Photo Preview"
+                        className="w-14 h-14 rounded-xl object-cover border border-emerald-500/40"
+                      />
+                    ) : (
+                      <div className="w-14 h-14 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 flex items-center justify-center">
+                        <Camera className="w-5 h-5 text-slate-500" />
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold text-white">Employee Profile Photo</div>
+                    <p className="text-[10px] text-slate-400 mb-2">
+                      Upload photo for company directory and profile card.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <label className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold rounded-lg cursor-pointer transition shadow-sm">
+                        <Camera className="w-3 h-3" />
+                        <span>Choose Photo</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) handleImageCompression(f, setAddAvatarUrl);
+                          }}
+                        />
+                      </label>
+                      {addAvatarUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setAddAvatarUrl(null)}
+                          className="px-2.5 py-1 bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 text-[11px] rounded-lg border border-slate-700 transition"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -1120,6 +1303,184 @@ export default function EmployeesPage() {
                 Done
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Employee Modal */}
+      {editingEmployee && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-800 mb-4 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                  <Pencil className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-white">Edit Employee Profile</h3>
+                  <p className="text-[11px] text-slate-400 font-mono">
+                    {editingEmployee.employee_code} • {editingEmployee.email}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingEmployee(null)}
+                className="text-slate-500 hover:text-slate-300 p-1.5 rounded-xl hover:bg-slate-800 transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {editError && (
+              <div className="mb-4 p-3 rounded-xl bg-red-950/50 border border-red-800/60 text-red-300 text-xs shrink-0 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                <span>{editError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleEditSubmit} className="space-y-4 text-xs overflow-y-auto pr-1 flex-1">
+              {/* Photo Upload Area */}
+              <div className="flex items-center gap-4 p-3.5 bg-slate-950/60 rounded-xl border border-slate-800/80">
+                <div className="relative shrink-0">
+                  {editAvatarUrl ? (
+                    <img
+                      src={editAvatarUrl}
+                      alt="Employee Avatar"
+                      className="w-16 h-16 rounded-xl object-cover border-2 border-emerald-500/40"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-xl bg-slate-800 border border-slate-700 text-emerald-400 font-bold text-base flex items-center justify-center">
+                      {editingEmployee.first_name[0]}{editingEmployee.last_name[0]}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <div className="text-xs font-semibold text-white">Profile Avatar</div>
+                  <div className="flex items-center gap-2">
+                    <label className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold rounded-lg cursor-pointer transition shadow-sm">
+                      <Camera className="w-3 h-3" />
+                      <span>Change Photo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) handleImageCompression(f, setEditAvatarUrl);
+                        }}
+                      />
+                    </label>
+                    {editAvatarUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setEditAvatarUrl(null)}
+                        className="px-2.5 py-1 bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 text-[11px] rounded-lg border border-slate-700 transition"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 mb-1 font-medium">First Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editFirstName}
+                    onChange={(e) => setEditFirstName(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 mb-1 font-medium">Last Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editLastName}
+                    onChange={(e) => setEditLastName(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-medium">Phone Number</label>
+                <input
+                  type="text"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  placeholder="+91 98765 43210"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 mb-1 font-medium">Department</label>
+                  <select
+                    value={editDepartmentId}
+                    onChange={(e) => setEditDepartmentId(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="">None / General</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 mb-1 font-medium">Designation</label>
+                  <select
+                    value={editDesignationId}
+                    onChange={(e) => setEditDesignationId(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="">None / Staff</option>
+                    {designations.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-medium">Employee Status</label>
+                <select
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="terminated">Terminated</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingEmployee(null)}
+                  className="px-4 py-2 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editLoading}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-2 rounded-xl shadow-lg shadow-emerald-600/25 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {editLoading ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

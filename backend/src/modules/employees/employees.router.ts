@@ -120,6 +120,7 @@ const createEmployeeSchema = z.object({
   bank_account_number: z.string().optional(),
   bank_ifsc: z.string().optional(),
   address: z.string().optional(),
+  avatar_url: z.string().optional(),
   pay_type: z.nativeEnum(PayType).optional(),
   base_amount: z.number().positive().optional(),
   effective_from: z.string().optional(),
@@ -201,6 +202,7 @@ const updateEmployeeSchema = z.object({
   bank_account_number: z.string().optional(),
   bank_ifsc: z.string().optional(),
   address: z.string().optional(),
+  avatar_url: z.string().nullable().optional(),
 });
 
 router.patch(
